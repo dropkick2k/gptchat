@@ -3,12 +3,32 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/ian-kent/gptchat/util"
-	"github.com/sashabaranov/go-openai"
+	openai "github.com/sashabaranov/go-openai"
 )
 
+// Recall retrieves memories based on user input
 func (m *Module) Recall(input string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Define the input structure
+	var data struct {
+		Query string   `json:"query"`
+		Tags  []string `json:"tags,omitempty"`
+	}
+
+	// Parse the input JSON
+	err := json.Unmarshal([]byte(input), &data)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse input: %v", err)
+	}
+
+	// Prepare the memories in JSON format
 	b, err := json.Marshal(m.memories)
 	if err != nil {
 		return "", err
@@ -40,7 +60,7 @@ You should review the listed memories and suggest which memories might match the
 					Content: `Help me find any memories which may match this request:
 
 ` + util.TripleQuote + `
-` + input + `
+` + data.Query + `
 ` + util.TripleQuote,
 				},
 			},
@@ -51,21 +71,10 @@ You should review the listed memories and suggest which memories might match the
 	}
 
 	response := resp.Choices[0].Message.Content
+
 	return `You have successfully recalled this memory:
 
 ` + util.TripleQuote + `
 ` + response + `
 ` + util.TripleQuote, nil
-
-	// TODO find a prompt which gets GPT to adjust relative time
-
-	//	return `You have successfully recalled this memory:
-	//
-	//` + util.TripleQuote + `
-	//` + response + `
-	//` + util.TripleQuote + `
-	//
-	//If this memory mentions relative time (for example today, yesterday, last week, tomorrow), remember to take this into consideration when using this information to answer questions.
-	//
-	//For example, if the memory says "tomorrow" and the memory was stored on 25th, the memory is actually referring to 26th.`, nil
 }
